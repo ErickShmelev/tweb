@@ -150,7 +150,7 @@ export default defineConfig({
     setupFiles: ['./src/tests/setup.ts']
   },
   server: serverOptions,
-  base: '',
+  base: './',
   build: {
     target: 'es2020',
     sourcemap: true,
