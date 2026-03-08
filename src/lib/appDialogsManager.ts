@@ -336,7 +336,7 @@ export class DialogElement extends Row {
     if(
       peerId.isAnyChat() &&
       peerId != -1087742193 &&
-      apiManagerProxy.getChat(peerId.toChatId()).pFlags.broadcast
+      (apiManagerProxy.getChat(peerId.toChatId()) as any)?.pFlags?.broadcast
     )
       titleSpanContainer.style.textDecoration = 'line-through';
     titleSpanContainer.classList.add('user-title');

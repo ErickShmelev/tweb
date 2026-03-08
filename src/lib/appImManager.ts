@@ -2431,8 +2431,8 @@ export class AppImManager extends EventListenerBase<{
 
       const _types = e.dataTransfer.types;
       // @ts-ignore
-      const isFiles = _types.contains ?
-        _types.contains('Files') :
+      const isFiles = _types.includes ?
+        _types.includes('Files') :
         _types.indexOf('Files') >= 0;
 
       const newMediaPopup = getCurrentNewMediaPopup();
@@ -2684,8 +2684,8 @@ export class AppImManager extends EventListenerBase<{
     if(e instanceof DragEvent) {
       const _types = e.dataTransfer.types;
       // @ts-ignore
-      const isFiles = _types.contains ?
-        _types.contains('Files') :
+      const isFiles = _types.includes ?
+        _types.includes('Files') :
         _types.indexOf('Files') >= 0;
       if(isFiles) {
         cancelEvent(e);
@@ -2931,7 +2931,7 @@ export class AppImManager extends EventListenerBase<{
     if(
       !(
         options.peerId.isAnyChat() &&
-        apiManagerProxy.getChat(options.peerId.toChatId()).pFlags.broadcast
+        (apiManagerProxy.getChat(options.peerId.toChatId()) as any)?.pFlags?.broadcast
       ) ||
       options.peerId == -1087742193
     ) {
