@@ -18,6 +18,7 @@
     "apply-new-lang": "node ./src/scripts/apply_new_lang.js",
     "watch-lang": "node watch-lang.js",
     "lint": "npx eslint \"src/**/**.ts\"",
+    "lint:fix": "npx eslint \"src/**/**.ts\" --fix",
     "build:solid": "node ./src/scripts/build_solid.js",
     "format-lang": "node ./src/scripts/format_lang.js"
   },

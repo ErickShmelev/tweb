@@ -20,21 +20,21 @@ import {AsAllChatsType} from '@lib/appDialogsManager';
 import IS_EMOJI_SUPPORTED from '@environment/emojiSupport';
 
 export type PeerTitleOptions = {
-  peerId?: PeerId,
-  fromName?: string,
-  plainText?: boolean,
-  onlyFirstName?: boolean,
-  username?: boolean,
-  dialog?: boolean,
-  limitSymbols?: number,
-  withIcons?: boolean,
-  withPremiumIcon?: boolean,
-  clickableEmojiStatus?: boolean,
-  threadId?: number,
-  meAsNotes?: boolean,
-  iconsColor?: string,
-  asAllChats?: AsAllChatsType,
-  wrapOptions?: WrapSomethingOptions
+  peerId?: PeerId;
+  fromName?: string;
+  plainText?: boolean;
+  onlyFirstName?: boolean;
+  username?: boolean;
+  dialog?: boolean;
+  limitSymbols?: number;
+  withIcons?: boolean;
+  withPremiumIcon?: boolean;
+  clickableEmojiStatus?: boolean;
+  threadId?: number;
+  meAsNotes?: boolean;
+  iconsColor?: string;
+  asAllChats?: AsAllChatsType;
+  wrapOptions?: WrapSomethingOptions;
 };
 
 const weakMap: WeakMap<HTMLElement, PeerTitle> = new WeakMap();
@@ -45,25 +45,32 @@ rootScope.addEventListener('peer_title_edit', ({peerId, threadId}) => {
     query += `[data-thread-id="${threadId}"]`;
   }
 
-  const elements = Array.from(document.querySelectorAll(query)) as HTMLElement[];
+  const elements = Array.from(
+    document.querySelectorAll(query),
+  ) as HTMLElement[];
   elements.forEach((element) => {
     const peerTitle = weakMap.get(element);
     peerTitle?.update();
   });
 });
 
-rootScope.addEventListener('botforum_pending_topic_created', ({peerId, tempId, newId}) => {
-  if(!newId) return;
+rootScope.addEventListener(
+  'botforum_pending_topic_created',
+  ({peerId, tempId, newId}) => {
+    if(!newId) return;
 
-  const query = `.peer-title[data-peer-id="${peerId}"][data-thread-id="${tempId}"]`;
+    const query = `.peer-title[data-peer-id="${peerId}"][data-thread-id="${tempId}"]`;
 
-  const elements = Array.from(document.querySelectorAll(query)) as HTMLElement[];
+    const elements = Array.from(
+      document.querySelectorAll(query),
+    ) as HTMLElement[];
 
-  elements.forEach((element) => {
-    const peerTitle = weakMap.get(element);
-    peerTitle?.update({...peerTitle.options, threadId: newId});
-  });
-});
+    elements.forEach((element) => {
+      const peerTitle = weakMap.get(element);
+      peerTitle?.update({...peerTitle.options, threadId: newId});
+    });
+  },
+);
 
 export default class PeerTitle {
   public element: HTMLElement;
@@ -94,9 +101,11 @@ export default class PeerTitle {
       // @ts-ignore
       const value = options[i];
 
-      if(typeof(value) !== 'object' && typeof(value) !== 'function') {
+      if(typeof value !== 'object' && typeof value !== 'function') {
         // @ts-ignore
-        this.element.dataset[i] = value ? '' + (typeof(value) === 'boolean' ? +value : value) : '0';
+        this.element.dataset[i] = value ?
+          '' + (typeof value === 'boolean' ? +value : value) :
+          '0';
       }
     }
   }
@@ -114,7 +123,11 @@ export default class PeerTitle {
     let fromName = this.options.fromName;
     if(fromName !== undefined) {
       if(this.options.limitSymbols !== undefined) {
-        fromName = limitSymbols(fromName, this.options.limitSymbols, this.options.limitSymbols);
+        fromName = limitSymbols(
+          fromName,
+          this.options.limitSymbols,
+          this.options.limitSymbols,
+        );
       }
 
       setInnerHTML(this.element, wrapEmojiText(fromName));
@@ -153,7 +166,10 @@ export default class PeerTitle {
 
       replaceContent(this.element, element);
     } else if(peerId === HIDDEN_PEER_ID) {
-      replaceContent(this.element, i18n(this.options.onlyFirstName ? 'AuthorHiddenShort' : 'AuthorHidden'));
+      replaceContent(
+        this.element,
+        i18n(this.options.onlyFirstName ? 'AuthorHiddenShort' : 'AuthorHidden'),
+      );
     } else {
       if(threadId) {
         const [topic, isForum, isBotforum] = await Promise.all([
@@ -163,20 +179,25 @@ export default class PeerTitle {
         ]);
 
         if(!topic && (isForum || isBotforum)) {
-          rootScope.managers.dialogsStorage.getForumTopicById(peerId, threadId).then((forumTopic) => {
-            if(!forumTopic && this.options.threadId === threadId) {
-              this.options.threadId = undefined;
-              this.update({threadId: undefined});
-              return;
-            }
+          rootScope.managers.dialogsStorage
+          .getForumTopicById(peerId, threadId)
+          .then(
+            (forumTopic) => {
+              if(!forumTopic && this.options.threadId === threadId) {
+                this.options.threadId = undefined;
+                this.update({threadId: undefined});
+                return;
+              }
 
-            this.update();
-          }, () => {
-            if(this.options.threadId === threadId) {
-              this.options.threadId = undefined;
-              this.update({threadId: undefined});
-            }
-          });
+              this.update();
+            },
+            () => {
+              if(this.options.threadId === threadId) {
+                this.options.threadId = undefined;
+                this.update({threadId: undefined});
+              }
+            },
+          );
 
           setInnerHTML(this.element, i18n('Loading'));
           this.setHasInner(false);
@@ -184,14 +205,39 @@ export default class PeerTitle {
         }
       }
 
-      const getTopicIconPromise = threadId && this.options.withIcons ?
-        rootScope.managers.dialogsStorage.getForumTopic(peerId, threadId).then((topic) => wrapTopicIcon({...(this.options.wrapOptions ?? {}), topic})) :
-        undefined;
+      const getTopicIconPromise =
+        threadId && this.options.withIcons ?
+          rootScope.managers.dialogsStorage
+          .getForumTopic(peerId, threadId)
+          .then((topic) =>
+            wrapTopicIcon({...(this.options.wrapOptions ?? {}), topic}),
+          ) :
+          undefined;
 
       const [title, icons, topicIcon] = await Promise.all([
         getPeerTitle(this.options as Required<PeerTitleOptions>),
-        (this.options.withIcons && generateTitleIcons({peerId, clickableEmojiStatus: this.options.clickableEmojiStatus, wrapOptions: {...this.options.wrapOptions, textColor: this.options.iconsColor || this.options.wrapOptions?.textColor}})) ||
-          (this.options.withPremiumIcon && generateTitleIcons({peerId, wrapOptions: {...this.options.wrapOptions, textColor: this.options.iconsColor || this.options.wrapOptions?.textColor}, noVerifiedIcon: true, noFakeIcon: true})),
+        (this.options.withIcons &&
+          generateTitleIcons({
+            peerId,
+            clickableEmojiStatus: this.options.clickableEmojiStatus,
+            wrapOptions: {
+              ...this.options.wrapOptions,
+              textColor:
+                this.options.iconsColor || this.options.wrapOptions?.textColor
+            }
+          })) ||
+          (this.options.withPremiumIcon &&
+            generateTitleIcons({
+              peerId,
+              wrapOptions: {
+                ...this.options.wrapOptions,
+                textColor:
+                  this.options.iconsColor ||
+                  this.options.wrapOptions?.textColor
+              },
+              noVerifiedIcon: true,
+              noFakeIcon: true
+            })),
         getTopicIconPromise
       ]);
 
@@ -209,17 +255,18 @@ export default class PeerTitle {
         fragment.append(...nodes);
 
         setInnerHTML(this.element, fragment);
-      }
+      };
 
       if(topicIcon) {
-        setElementContent(
-          [topicIcon, createInnerTitleSpan()].filter(Boolean)
-        );
+        setElementContent([topicIcon, createInnerTitleSpan()].filter(Boolean));
       } else if(icons?.elements?.length || icons?.botVerification) {
         setElementContent(
           [
-            icons.botVerification, topicIcon, createInnerTitleSpan(), ...(icons.elements ?? [])
-          ].filter(Boolean)
+            icons.botVerification,
+            topicIcon,
+            createInnerTitleSpan(),
+            ...(icons.elements ?? [])
+          ].filter(Boolean),
         );
       } else {
         setInnerHTML(this.element, title);
@@ -231,11 +278,13 @@ export default class PeerTitle {
 }
 
 export function changeTitleEmojiColor(element: HTMLElement, color: string) {
-  const elements = element.querySelectorAll<HTMLElement>('.emoji-status-text-color');
+  const elements = element.querySelectorAll<HTMLElement>(
+    '.emoji-status-text-color',
+  );
   elements.forEach((emojiStatus) => {
     const player = emojiStatus && lottieLoader.getAnimation(emojiStatus);
     if(player) {
       player.setColor(color, true);
     }
-  })
+  });
 }

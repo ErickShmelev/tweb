@@ -4,11 +4,14 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type LazyLoadQueue from '@components/lazyLoadQueue';
-import type {PeerPhotoSize} from '@appManagers/appAvatarsManager';
-import type {StoriesSegment, StoriesSegments} from '@appManagers/appStoriesManager';
-import {getMiddleware, type Middleware} from '@helpers/middleware';
-import deferredPromise from '@helpers/cancellablePromise';
+import type LazyLoadQueue from "@components/lazyLoadQueue";
+import type { PeerPhotoSize } from "@appManagers/appAvatarsManager";
+import type {
+  StoriesSegment,
+  StoriesSegments,
+} from "@appManagers/appStoriesManager";
+import { getMiddleware, type Middleware } from "@helpers/middleware";
+import deferredPromise from "@helpers/cancellablePromise";
 import {
   createSignal,
   createEffect,
@@ -19,39 +22,47 @@ import {
   Show,
   Accessor,
   on,
-  createComputed
-} from 'solid-js';
-import rootScope from '@lib/rootScope';
-import {NULL_PEER_ID, REPLIES_PEER_ID, HIDDEN_PEER_ID} from '@appManagers/constants';
-import {Chat, ChatPhoto, PhotoSize, User, UserProfilePhoto} from '@layer';
-import {getPeerAvatarColorByPeer} from '@appManagers/utils/peers/getPeerColorById';
-import getPeerPhoto from '@appManagers/utils/peers/getPeerPhoto';
-import wrapAbbreviation from '@lib/richTextProcessor/wrapAbbreviation';
-import getPeerInitials from '@components/wrappers/getPeerInitials';
-import liteMode from '@helpers/liteMode';
-import renderImageFromUrl, {renderImageFromUrlPromise} from '@helpers/dom/renderImageFromUrl';
-import getPreviewURLFromBytes from '@helpers/bytes/getPreviewURLFromBytes';
-import classNames from '@helpers/string/classNames';
-import {wrapTopicIcon} from '@components/wrappers/messageActionTextNewUnsafe';
-import {Modify} from '@types';
-import documentFragmentToNodes from '@helpers/dom/documentFragmentToNodes';
-import DashedCircle, {DashedCircleSection} from '@helpers/canvas/dashedCircle';
-import findUpClassName from '@helpers/dom/findUpClassName';
-import {AckedResult} from '@lib/superMessagePort';
-import apiManagerProxy from '@lib/apiManagerProxy';
-import callbackify from '@helpers/callbackify';
-import Icon from '@components/icon';
-import wrapPhoto from '@components/wrappers/photo';
-import customProperties from '@helpers/dom/customProperties';
-import useIsNightTheme from '@hooks/useIsNightTheme';
-import currencyStarIcon from '@components/currencyStarIcon';
-import type {ActiveAccountNumber} from '@lib/accounts/types';
-import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
-import {appSettings} from '@stores/appSettings';
-import {createAutoDeleteIcon} from '@components/chat/utils';
-import {resolveElements} from '@solid-primitives/refs';
-import toArray from '@helpers/array/toArray';
-import computeLockColor from '@helpers/computeLockColor';
+  createComputed,
+} from "solid-js";
+import rootScope from "@lib/rootScope";
+import {
+  NULL_PEER_ID,
+  REPLIES_PEER_ID,
+  HIDDEN_PEER_ID,
+} from "@appManagers/constants";
+import { Chat, ChatPhoto, PhotoSize, User, UserProfilePhoto } from "@layer";
+import { getPeerAvatarColorByPeer } from "@appManagers/utils/peers/getPeerColorById";
+import getPeerPhoto from "@appManagers/utils/peers/getPeerPhoto";
+import wrapAbbreviation from "@lib/richTextProcessor/wrapAbbreviation";
+import getPeerInitials from "@components/wrappers/getPeerInitials";
+import liteMode from "@helpers/liteMode";
+import renderImageFromUrl, {
+  renderImageFromUrlPromise,
+} from "@helpers/dom/renderImageFromUrl";
+import getPreviewURLFromBytes from "@helpers/bytes/getPreviewURLFromBytes";
+import classNames from "@helpers/string/classNames";
+import { wrapTopicIcon } from "@components/wrappers/messageActionTextNewUnsafe";
+import { Modify } from "@types";
+import documentFragmentToNodes from "@helpers/dom/documentFragmentToNodes";
+import DashedCircle, {
+  DashedCircleSection,
+} from "@helpers/canvas/dashedCircle";
+import findUpClassName from "@helpers/dom/findUpClassName";
+import { AckedResult } from "@lib/superMessagePort";
+import apiManagerProxy from "@lib/apiManagerProxy";
+import callbackify from "@helpers/callbackify";
+import Icon from "@components/icon";
+import wrapPhoto from "@components/wrappers/photo";
+import customProperties from "@helpers/dom/customProperties";
+import useIsNightTheme from "@hooks/useIsNightTheme";
+import currencyStarIcon from "@components/currencyStarIcon";
+import type { ActiveAccountNumber } from "@lib/accounts/types";
+import { getCurrentAccount } from "@lib/accounts/getCurrentAccount";
+import { appSettings } from "@stores/appSettings";
+import { createAutoDeleteIcon } from "@components/chat/utils";
+import { resolveElements } from "@solid-primitives/refs";
+import toArray from "@helpers/array/toArray";
+import computeLockColor from "@helpers/computeLockColor";
 
 const FADE_IN_DURATION = 200;
 const TEST_SWAPPING = 0;
@@ -61,93 +72,130 @@ const believeMe: Map<string, Set<ReturnType<typeof AvatarNew>>> = new Map();
 const seen: Set<PeerId> = new Set();
 
 function getAvatarQueueKey(peerId: PeerId, threadId?: number) {
-  return peerId + (threadId ? '_' + threadId : '');
+  return peerId + (threadId ? "_" + threadId : "");
 }
 
-const onAvatarUpdate = ({peerId, threadId}: {peerId: PeerId, threadId?: number}) => {
+const onAvatarUpdate = ({
+  peerId,
+  threadId,
+}: {
+  peerId: PeerId;
+  threadId?: number;
+}) => {
   const key = getAvatarQueueKey(peerId, threadId);
   const set = avatarsMap.get(key);
-  if(!set?.size) {
+  if (!set?.size) {
     return;
   }
 
-  for(const avatar of set) {
+  for (const avatar of set) {
     avatar.render();
   }
 };
 
-const onAvatarStoriesUpdate = ({peerId}: {peerId: PeerId}) => {
+const onAvatarStoriesUpdate = ({ peerId }: { peerId: PeerId }) => {
   const key = getAvatarQueueKey(peerId);
   const set = avatarsMap.get(key);
-  if(!set?.size) {
+  if (!set?.size) {
     return;
   }
 
-  for(const avatar of set) {
+  for (const avatar of set) {
     avatar.updateStoriesSegments();
   }
 };
 
-rootScope.addEventListener('avatar_update', onAvatarUpdate);
-rootScope.addEventListener('peer_title_edit', async(data) => {
-  if(!data.threadId && (await rootScope.managers.appAvatarsManager.isAvatarCached(data.peerId))) return;
+rootScope.addEventListener("avatar_update", onAvatarUpdate);
+rootScope.addEventListener("peer_title_edit", async (data) => {
+  if (
+    !data.threadId &&
+    (await rootScope.managers.appAvatarsManager.isAvatarCached(data.peerId))
+  )
+    return;
 
   onAvatarUpdate(data);
 });
 
-rootScope.addEventListener('peer_stories', ({peerId}) => {
-  onAvatarStoriesUpdate({peerId});
+rootScope.addEventListener("peer_stories", ({ peerId }) => {
+  onAvatarStoriesUpdate({ peerId });
 });
-rootScope.addEventListener('stories_read', onAvatarStoriesUpdate);
-rootScope.addEventListener('story_deleted', onAvatarStoriesUpdate);
-rootScope.addEventListener('story_new', onAvatarStoriesUpdate);
+rootScope.addEventListener("stories_read", onAvatarStoriesUpdate);
+rootScope.addEventListener("story_deleted", onAvatarStoriesUpdate);
+rootScope.addEventListener("story_new", onAvatarStoriesUpdate);
 
+const getStoriesSegments = async (
+  peerId: PeerId,
+  storyId?: number,
+): Promise<AckedResult<StoriesSegments>> => {
+  if (storyId) {
+    const storyUnreadType =
+      await rootScope.managers.appStoriesManager.getUnreadType(peerId, storyId);
 
-const getStoriesSegments = async(peerId: PeerId, storyId?: number): Promise<AckedResult<StoriesSegments>> => {
-  if(storyId) {
-    const storyUnreadType = await rootScope.managers.appStoriesManager.getUnreadType(peerId, storyId);
-
-    const segments: StoriesSegments = [{
-      length: 1,
-      type: storyUnreadType
-    }];
+    const segments: StoriesSegments = [
+      {
+        length: 1,
+        type: storyUnreadType,
+      },
+    ];
 
     return {
       cached: true,
-      result: Promise.resolve(segments)
+      result: Promise.resolve(segments),
     };
   }
 
-  return rootScope.managers.acknowledged.appStoriesManager.getPeerStoriesSegments(peerId);
+  return rootScope.managers.acknowledged.appStoriesManager.getPeerStoriesSegments(
+    peerId,
+  );
 };
 
-const createUnreadGradient = (context: CanvasRenderingContext2D, size: number, dpr: number) => {
+const createUnreadGradient = (
+  context: CanvasRenderingContext2D,
+  size: number,
+  dpr: number,
+) => {
   const gradient = context.createLinearGradient(
     size * 0.9156 * dpr,
     size * -0.05695821429 * dpr,
     size * 0.1342364286 * dpr,
-    size * 1.02370714286 * dpr
+    size * 1.02370714286 * dpr,
   );
-  gradient.addColorStop(0, customProperties.getProperty('avatar-color-story-unread-from'));
-  gradient.addColorStop(1, customProperties.getProperty('avatar-color-story-unread-to'));
+  gradient.addColorStop(
+    0,
+    customProperties.getProperty("avatar-color-story-unread-from"),
+  );
+  gradient.addColorStop(
+    1,
+    customProperties.getProperty("avatar-color-story-unread-to"),
+  );
   return gradient;
 };
 
-const createCloseGradient = (context: CanvasRenderingContext2D, size: number, dpr: number) => {
+const createCloseGradient = (
+  context: CanvasRenderingContext2D,
+  size: number,
+  dpr: number,
+) => {
   const gradient = context.createLinearGradient(
     size * 0.5 * dpr,
     size * 0 * dpr,
     size * 0.5 * dpr,
-    size * 1 * dpr
+    size * 1 * dpr,
   );
-  gradient.addColorStop(0, customProperties.getProperty('avatar-color-story-close-from'));
-  gradient.addColorStop(1, customProperties.getProperty('avatar-color-story-close-to'));
+  gradient.addColorStop(
+    0,
+    customProperties.getProperty("avatar-color-story-close-from"),
+  );
+  gradient.addColorStop(
+    1,
+    customProperties.getProperty("avatar-color-story-close-to"),
+  );
   return gradient;
 };
 
 export function findUpAvatar(target: Element | EventTarget) {
-  let avatar = findUpClassName(target, 'avatar');
-  if(avatar) avatar = findUpClassName(avatar, 'has-stories') || avatar;
+  let avatar = findUpClassName(target, "avatar");
+  if (avatar) avatar = findUpClassName(avatar, "has-stories") || avatar;
   return avatar;
 }
 
@@ -162,15 +210,15 @@ const calculateSegmentsDimensions = (s: number) => {
     willBeSize,
     totalSvgSize,
     multiplier,
-    strokeWidth
+    strokeWidth,
   };
 };
 
 export function wrapPhotoToAvatar(
   avatarElem: ReturnType<typeof avatarNew>,
-  photo: Parameters<typeof wrapPhoto>[0]['photo'],
+  photo: Parameters<typeof wrapPhoto>[0]["photo"],
   boxSize: number = 100,
-  photoSize?: PhotoSize
+  photoSize?: PhotoSize,
 ) {
   return wrapPhoto({
     container: avatarElem.node,
@@ -179,20 +227,20 @@ export function wrapPhotoToAvatar(
     boxHeight: boxSize,
     boxWidth: boxSize,
     withoutPreloader: true,
-    size: photoSize
+    size: photoSize,
   }).then((result) => {
-    avatarElem.node.classList.replace('media-container', 'avatar-relative');
-    avatarElem.node.style.width = avatarElem.node.style.height = '';
+    avatarElem.node.classList.replace("media-container", "avatar-relative");
+    avatarElem.node.style.width = avatarElem.node.style.height = "";
     [result.images.thumb, result.images.full].forEach((image) => {
-      if(!image) {
+      if (!image) {
         return;
       }
 
-      image.classList.replace('media-photo', 'avatar-photo');
+      image.classList.replace("media-photo", "avatar-photo");
     });
 
-    if(result.images.thumb) {
-      result.images.thumb.classList.add('avatar-photo-thumbnail');
+    if (result.images.thumb) {
+      result.images.thumb.classList.add("avatar-photo-thumbnail");
     }
 
     return result.loadPromises.thumb;
@@ -200,20 +248,22 @@ export function wrapPhotoToAvatar(
 }
 
 export function StoriesSegments(props: {
-  size: number,
+  size: number;
   colors: Partial<{
-    read: string
-  }>,
-  simple?: boolean,
-  isStoryFolded?: Accessor<boolean>,
+    read: string;
+  }>;
+  simple?: boolean;
+  isStoryFolded?: Accessor<boolean>;
 }) {
   const [storiesSegments, setStoriesSegments] = createSignal<StoriesSegments>();
-  const storyDimensions: Accessor<ReturnType<typeof calculateSegmentsDimensions>> = createMemo((previousDimensions) => {
-    if(storiesSegments() === undefined) {
+  const storyDimensions: Accessor<
+    ReturnType<typeof calculateSegmentsDimensions>
+  > = createMemo((previousDimensions) => {
+    if (storiesSegments() === undefined) {
       return;
     }
 
-    if(previousDimensions?.size === props.size) {
+    if (previousDimensions?.size === props.size) {
       return previousDimensions;
     }
 
@@ -225,126 +275,155 @@ export function StoriesSegments(props: {
     // }
 
     const dimensions = storyDimensions();
-    if(!dimensions) {
+    if (!dimensions) {
       return;
     }
 
     let simple: JSX.Element;
-    if(props.isStoryFolded !== undefined || props.simple) {
+    if (props.isStoryFolded !== undefined || props.simple) {
       const status = createMemo(() => {
         const segments = storiesSegments();
-        const firstCloseSegment = segments.find((segment) => segment.type === 'close');
-        const segment = firstCloseSegment || segments.find((segment) => segment.type === 'unread') || segments[0];
+        const firstCloseSegment = segments.find(
+          (segment) => segment.type === "close",
+        );
+        const segment =
+          firstCloseSegment ||
+          segments.find((segment) => segment.type === "unread") ||
+          segments[0];
         return segment.type;
       });
 
       simple = (
         <div
           class="avatar-stories-simple"
-          classList={{['is-' + status()]: true}}
-        >
-
-        </div>
+          classList={{ ["is-" + status()]: true }}
+        ></div>
       );
-      if(props.simple) return simple;
+      if (props.simple) return simple;
     }
 
-    const segmentToSection = (segment: StoriesSegment, unreadAsClose?: boolean): DashedCircleSection => {
-      if(segment.type === 'read') {
+    const segmentToSection = (
+      segment: StoriesSegment,
+      unreadAsClose?: boolean,
+    ): DashedCircleSection => {
+      if (segment.type === "read") {
         return {
-          color: props.colors?.read || customProperties.getProperty('avatar-color-story-read'),
+          color:
+            props.colors?.read ||
+            customProperties.getProperty("avatar-color-story-read"),
           length: segment.length,
-          lineWidth: dimensions.strokeWidth / 2
+          lineWidth: dimensions.strokeWidth / 2,
         };
       }
 
-      if(segment.type === 'close' || unreadAsClose) {
+      if (segment.type === "close" || unreadAsClose) {
         return {
-          color: closeGradient ??= createCloseGradient(context, canvas.width, dpr),
+          color: (closeGradient ??= createCloseGradient(
+            context,
+            canvas.width,
+            dpr,
+          )),
           length: segment.length,
-          lineWidth: dimensions.strokeWidth
+          lineWidth: dimensions.strokeWidth,
         };
       } else {
         return {
-          color: unreadGradient ??= createUnreadGradient(context, canvas.width, dpr),
+          color: (unreadGradient ??= createUnreadGradient(
+            context,
+            canvas.width,
+            dpr,
+          )),
           length: segment.length,
-          lineWidth: dimensions.strokeWidth
+          lineWidth: dimensions.strokeWidth,
         };
       }
     };
 
     const dashedCircle = new DashedCircle();
-    const {canvas, context, dpr} = dashedCircle;
+    const { canvas, context, dpr } = dashedCircle;
     dashedCircle.prepare({
       radius: dimensions.size / 2,
       gap: 4 * dimensions.multiplier,
       width: dimensions.totalSvgSize,
-      height: dimensions.totalSvgSize
+      height: dimensions.totalSvgSize,
     });
 
     let unreadGradient: CanvasGradient, closeGradient: CanvasGradient;
-    canvas.style.setProperty('--offset', `${(dimensions.totalSvgSize - dimensions.size) / -2}px`);
-    canvas.classList.add('avatar-stories-svg');
+    canvas.style.setProperty(
+      "--offset",
+      `${(dimensions.totalSvgSize - dimensions.size) / -2}px`,
+    );
+    canvas.classList.add("avatar-stories-svg");
 
     const render = () => {
       const segments = storiesSegments();
-      const firstCloseSegment = segments.find((segment) => segment.type === 'close');
-      let sections = segments.map((segment) => segmentToSection(segment, !!firstCloseSegment));
-      const totalLength = sections.reduce((sum, section) => sum + section.length, 0);
-      if(totalLength > 30) {
-        sections = sections.map((section) => ({
-          ...section,
-          length: Math.floor(section.length / totalLength * 30)
-        })).filter((section) => section.length > 0);
+      const firstCloseSegment = segments.find(
+        (segment) => segment.type === "close",
+      );
+      let sections = segments.map((segment) =>
+        segmentToSection(segment, !!firstCloseSegment),
+      );
+      const totalLength = sections.reduce(
+        (sum, section) => sum + section.length,
+        0,
+      );
+      if (totalLength > 30) {
+        sections = sections
+          .map((section) => ({
+            ...section,
+            length: Math.floor((section.length / totalLength) * 30),
+          }))
+          .filter((section) => section.length > 0);
       }
 
       dashedCircle.render(sections);
     };
 
     const isNightTheme = useIsNightTheme();
-    createEffect(on(
-      [isNightTheme, storiesSegments],
-      () => {
+    createEffect(
+      on([isNightTheme, storiesSegments], () => {
         unreadGradient = closeGradient = undefined;
         render();
-      }
-    ));
+      }),
+    );
 
     return simple ? (
       <>
         {canvas}
         {simple}
       </>
-    ) : canvas;
+    ) : (
+      canvas
+    );
   });
 
-  return {setStoriesSegments, storyDimensions, storiesCircle};
+  return { setStoriesSegments, storyDimensions, storiesCircle };
 }
 
 export const AvatarNew = (props: {
-  accountNumber?: ActiveAccountNumber,
-  peerId?: PeerId,
-  threadId?: number,
-  isDialog?: boolean,
-  isBig?: boolean,
-  isSubscribed?: boolean,
-  peerTitle?: string,
-  lazyLoadQueue?: LazyLoadQueue | false,
-  wrapOptions?: WrapSomethingOptions,
-  withStories?: boolean,
-  storyId?: number,
-  useCache?: boolean,
-  size: number | 'full',
-  props?: JSX.HTMLAttributes<HTMLDivElement>,
-  storyColors?: Parameters<typeof StoriesSegments>[0]['colors'],
-  peer?: Chat.channel | Chat.chat | User.user,
-  isStoryFolded?: Accessor<boolean>,
-  processImageOnLoad?: (image: HTMLImageElement) => void,
-  meAsNotes?: boolean,
-  asAllChats?: boolean,
-  autoDeletePeriod?: number,
-  onStoriesStatus?: (has: boolean) => void,
-  class?: string
+  accountNumber?: ActiveAccountNumber;
+  peerId?: PeerId;
+  threadId?: number;
+  isDialog?: boolean;
+  isBig?: boolean;
+  isSubscribed?: boolean;
+  peerTitle?: string;
+  lazyLoadQueue?: LazyLoadQueue | false;
+  wrapOptions?: WrapSomethingOptions;
+  withStories?: boolean;
+  storyId?: number;
+  useCache?: boolean;
+  size: number | "full";
+  props?: JSX.HTMLAttributes<HTMLDivElement>;
+  storyColors?: Parameters<typeof StoriesSegments>[0]["colors"];
+  peer?: Chat.channel | Chat.chat | User.user;
+  isStoryFolded?: Accessor<boolean>;
+  processImageOnLoad?: (image: HTMLImageElement) => void;
+  meAsNotes?: boolean;
+  asAllChats?: boolean;
+  autoDeletePeriod?: number;
+  onStoriesStatus?: (has: boolean) => void;
+  class?: string;
 }) => {
   const [ready, setReady] = createSignal(false);
   const [icon, setIcon] = createSignal<Icon>();
@@ -356,36 +435,46 @@ export const AvatarNew = (props: {
   const [isTopic, setIsTopic] = createSignal(false);
   const [isMonoforum, setIsMonoforum] = createSignal(false);
   const [isSubscribed, setIsSubscribed] = createSignal(false);
-  const {setStoriesSegments, storyDimensions, storiesCircle} = StoriesSegments({
-    size: props.size as number,
-    colors: props.storyColors,
-    isStoryFolded: props.isStoryFolded
-  });
+  const { setStoriesSegments, storyDimensions, storiesCircle } =
+    StoriesSegments({
+      size: props.size as number,
+      colors: props.storyColors,
+      isStoryFolded: props.isStoryFolded,
+    });
 
   const [autoDeletePeriod, setAutoDeletePeriod] = createSignal<number>();
 
   createComputed(() => setAutoDeletePeriod(props.autoDeletePeriod ?? 0));
 
   const autoDeletePeriodBackground = createMemo(() => {
-    if(!autoDeletePeriod()) return;
+    if (!autoDeletePeriod()) return;
 
-    const mediaElement = toArray(resolveElements(media, (el) => el instanceof HTMLImageElement)())[0];
-    if(!mediaElement) return;
+    const mediaElement = toArray(
+      resolveElements(media, (el) => el instanceof HTMLImageElement)(),
+    )[0];
+    if (!mediaElement) return;
 
     const smallSize = 20;
 
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = smallSize;
     canvas.height = smallSize;
 
     const imgW = mediaElement.naturalWidth;
     const imgH = mediaElement.naturalHeight;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "white";
     ctx.drawImage(
       mediaElement,
-      imgW * 0.75, imgH * 0.75, imgW * 0.25, imgH * 0.25,
-      0, 0, smallSize, smallSize
+      imgW * 0.75,
+      imgH * 0.75,
+      imgW * 0.25,
+      imgH * 0.25,
+      0,
+      0,
+      smallSize,
+      smallSize,
     );
 
     return computeLockColor(canvas);
@@ -395,8 +484,11 @@ export const AvatarNew = (props: {
   const readyThumbPromise = deferredPromise<void>();
   const myId = rootScope.myId;
   const managers = rootScope.managers;
-  const middlewareHelper = props.wrapOptions?.middleware ? props.wrapOptions.middleware.create() : getMiddleware();
-  let addedToQueue = false, lastRenderPromise: ReturnType<typeof _render>;
+  const middlewareHelper = props.wrapOptions?.middleware
+    ? props.wrapOptions.middleware.create()
+    : getMiddleware();
+  let addedToQueue = false,
+    lastRenderPromise: ReturnType<typeof _render>;
 
   onCleanup(() => {
     lastRenderPromise = undefined;
@@ -404,7 +496,7 @@ export const AvatarNew = (props: {
     readyPromise.resolve();
     cleanLastKey();
 
-    (props.lazyLoadQueue as LazyLoadQueue)?.delete({div: node});
+    (props.lazyLoadQueue as LazyLoadQueue)?.delete({ div: node });
   });
 
   // const owner = getOwner();
@@ -424,76 +516,82 @@ export const AvatarNew = (props: {
 
   const getKey = () => getAvatarQueueKey(props.peerId, props.threadId);
   const cleanLastKey = () => {
-    if(!lastKey) {
+    if (!lastKey) {
       return;
     }
 
     const set = believeMe.get(lastKey);
-    if(set) {
+    if (set) {
       set.delete(this);
-      if(!set.size) {
+      if (!set.size) {
         believeMe.delete(lastKey);
       }
     }
 
     const avatarsSet = avatarsMap.get(lastKey);
-    if(!avatarsSet?.delete(ret)) {
+    if (!avatarsSet?.delete(ret)) {
       return;
     }
 
-    if(!avatarsSet.size) {
+    if (!avatarsSet.size) {
       avatarsMap.delete(lastKey);
     }
   };
 
-  const putAvatar = async(options: {
-    photo: UserProfilePhoto.userProfilePhoto | ChatPhoto.chatPhoto,
-    size: PeerPhotoSize,
-    onlyThumb?: boolean
+  const putAvatar = async (options: {
+    photo: UserProfilePhoto.userProfilePhoto | ChatPhoto.chatPhoto;
+    size: PeerPhotoSize;
+    onlyThumb?: boolean;
   }) => {
     const middleware = middlewareHelper.get();
-    const {peerId, useCache} = props;
-    const {photo, size} = options;
-    const result = apiManagerProxy.loadAvatar(peerId, photo, size, props.accountNumber);
+    const { peerId, useCache } = props;
+    const { photo, size } = options;
+    const result = apiManagerProxy.loadAvatar(
+      peerId,
+      photo,
+      size,
+      props.accountNumber,
+    );
     const loadPromise = result;
     const cached = !(result instanceof Promise);
 
-    const animate = !cached && liteMode.isAvailable('animations');
+    const animate = !cached && liteMode.isAvailable("animations");
     let image: HTMLImageElement;
-    const element = image = document.createElement('img');
-    element.className = classNames('avatar-photo', animate && 'fade-in');
+    const element = (image = document.createElement("img"));
+    element.className = classNames("avatar-photo", animate && "fade-in");
 
     let renderThumbPromise: Promise<void>;
     let callback: () => void;
     let thumbImage: HTMLImageElement, thumbElement: JSX.Element;
-    if(cached) {
+    if (cached) {
       callback = () => {
-        if(!middleware()) {
+        if (!middleware()) {
           return;
         }
 
         _setMedia(element);
       };
     } else {
-      if(size === 'photo_big') { // let's load small photo first
-        const res = await putAvatar({photo, size: 'photo_small'});
-        if(!middleware()) {
+      if (size === "photo_big") {
+        // let's load small photo first
+        const res = await putAvatar({ photo, size: "photo_small" });
+        if (!middleware()) {
           return;
         }
 
         renderThumbPromise = res.loadThumbPromise || res.loadPromise;
         thumbImage = res.thumbImage;
-      } else if(photo.stripped_thumb) {
-        thumbElement = thumbImage = document.createElement('img');
-        thumbImage.className = 'avatar-photo avatar-photo-thumbnail';
+      } else if (photo.stripped_thumb) {
+        thumbElement = thumbImage = document.createElement("img");
+        thumbImage.className = "avatar-photo avatar-photo-thumbnail";
         const url = getPreviewURLFromBytes(photo.stripped_thumb);
         renderThumbPromise = renderImageFromUrlPromise(
           thumbImage,
           url,
           props.useCache,
-          props.processImageOnLoad
+          props.processImageOnLoad,
         ).then(() => {
-          if(media() || !middleware()) {
+          if (media() || !middleware()) {
             return;
           }
 
@@ -502,16 +600,19 @@ export const AvatarNew = (props: {
       }
 
       callback = () => {
-        if(!middleware()) {
+        if (!middleware()) {
           return;
         }
 
         _setMedia(element);
-        if(animate) {
-          setTimeout(() => {
-            image.classList.remove('fade-in');
-            setThumb();
-          }, animate ? FADE_IN_DURATION : 0);
+        if (animate) {
+          setTimeout(
+            () => {
+              image.classList.remove("fade-in");
+              setThumb();
+            },
+            animate ? FADE_IN_DURATION : 0,
+          );
         } else {
           setThumb();
         }
@@ -519,7 +620,13 @@ export const AvatarNew = (props: {
     }
 
     const renderPromise = callbackify(loadPromise, (url) => {
-      const result = renderImageFromUrl(image, url, undefined, useCache, props.processImageOnLoad);
+      const result = renderImageFromUrl(
+        image,
+        url,
+        undefined,
+        useCache,
+        props.processImageOnLoad,
+      );
       callbackify(result, callback);
       return result instanceof Promise ? result : Promise.resolve(result);
     });
@@ -527,11 +634,13 @@ export const AvatarNew = (props: {
     return {
       cached,
       loadPromise: renderPromise,
-      loadThumbPromise: cached ? renderPromise : renderThumbPromise || Promise.resolve(),
+      loadThumbPromise: cached
+        ? renderPromise
+        : renderThumbPromise || Promise.resolve(),
       thumbImage,
       thumbElement,
       image,
-      element
+      element,
     };
   };
 
@@ -543,16 +652,16 @@ export const AvatarNew = (props: {
     isTopic,
     isSubscribed,
     isMonoforum,
-    storiesSegments
+    storiesSegments,
   }: {
-    abbreviature?: JSX.Element,
-    icon?: Icon,
-    color?: string,
-    isForum?: boolean,
-    isTopic?: boolean,
-    isSubscribed?: boolean,
-    isMonoforum?: boolean,
-    storiesSegments?: StoriesSegments
+    abbreviature?: JSX.Element;
+    icon?: Icon;
+    color?: string;
+    isForum?: boolean;
+    isTopic?: boolean;
+    isSubscribed?: boolean;
+    isMonoforum?: boolean;
+    storiesSegments?: StoriesSegments;
   }) => {
     setThumb();
     setMedia();
@@ -566,186 +675,222 @@ export const AvatarNew = (props: {
     setStoriesSegments(storiesSegments);
   };
 
-  const updateStoriesSegments = async() => {
-    if(!props.withStories || (props.peerId === rootScope.myId && props.isDialog)) {
+  const updateStoriesSegments = async () => {
+    if (
+      !props.withStories ||
+      (props.peerId === rootScope.myId && props.isDialog)
+    ) {
       return;
     }
 
-    const segments = await (await getStoriesSegments(props.peerId, props.storyId)).result;
-    if(lastRenderPromise) {
+    const segments = await (
+      await getStoriesSegments(props.peerId, props.storyId)
+    ).result;
+    if (lastRenderPromise) {
       const result = await lastRenderPromise;
       await result?.loadThumbPromise;
     }
     setStoriesSegments(segments);
   };
 
-  const _render = async(onlyThumb?: boolean) => {
+  const _render = async (onlyThumb?: boolean) => {
     const middleware = middlewareHelper.get();
-    const {isDialog, withStories, storyId, isBig, peerTitle: title, threadId, wrapOptions} = props;
+    const {
+      isDialog,
+      withStories,
+      storyId,
+      isBig,
+      peerTitle: title,
+      threadId,
+      wrapOptions,
+    } = props;
 
-    let {peerId} = props;
-    if(title !== undefined) {
+    let { peerId } = props;
+    if (title !== undefined) {
       peerId = NULL_PEER_ID;
     }
 
-    if(props.asAllChats) {
+    if (props.asAllChats) {
       set({
-        icon: 'round_chats_filled'
+        icon: "round_chats_filled",
       });
       return;
     }
 
-    if(peerId === myId && isDialog) {
+    if (peerId === myId && isDialog) {
       set({
-        icon: props.meAsNotes ? 'mynotes' : 'saved',
-        isForum: !props.meAsNotes && appSettings.savedAsForum
+        icon: props.meAsNotes ? "mynotes" : "saved",
+        isForum: !props.meAsNotes && appSettings.savedAsForum,
       });
 
-      !props.meAsNotes && createRoot((dispose) => {
-        createEffect(
-          on(
-            () => appSettings.savedAsForum,
-            setIsForum,
-            {defer: true}
-          )
-        );
+      !props.meAsNotes &&
+        createRoot((dispose) => {
+          createEffect(
+            on(() => appSettings.savedAsForum, setIsForum, { defer: true }),
+          );
 
-        middleware.onDestroy(dispose);
-      });
+          middleware.onDestroy(dispose);
+        });
       return;
     }
 
     const peer = props.peer ?? apiManagerProxy.getPeer(peerId);
-    if(title) {
+    if (title) {
       const color = getPeerAvatarColorByPeer(peer);
       const abbr = wrapAbbreviation(title);
       set({
         abbreviature: documentFragmentToNodes(abbr),
-        color
+        color,
       });
       return;
     }
 
-    if(threadId) {
-      const topic = await managers.dialogsStorage.getForumTopic(peerId, threadId);
-      set({isTopic: true});
+    if (threadId) {
+      const topic = await managers.dialogsStorage.getForumTopic(
+        peerId,
+        threadId,
+      );
+      set({ isTopic: true });
 
       return wrapTopicIcon({
         ...wrapOptions,
         middleware,
         topic,
-        lazyLoadQueue: false
+        lazyLoadQueue: false,
       }).then((icon) => {
         _setMedia(icon);
         return undefined as ReturnType<typeof putAvatar>;
       });
     }
 
-    if(!middleware()) {
+    if (!middleware()) {
       return;
     }
 
-    if(peerId !== NULL_PEER_ID && peerId.isUser() && (peer as User.user)?.pFlags?.deleted) {
-      set({color: 'archive', icon: 'deletedaccount'});
+    if (
+      peerId !== NULL_PEER_ID &&
+      peerId.isUser() &&
+      (peer as User.user)?.pFlags?.deleted
+    ) {
+      set({ color: "archive", icon: "deletedaccount" });
       return;
     }
 
     const _isForum = !!(peer as Chat.channel)?.pFlags?.forum;
-    const _isSubscribed = props.isSubscribed ?? !!(peer as Chat.channel)?.subscription_until_date;
-    const storiesSegmentsResult = withStories && ((peer as User.user | Chat.channel)?.stories_max_id || storyId) && await getStoriesSegments(peerId, storyId);
-    const storiesSegments = storiesSegmentsResult?.cached ? await storiesSegmentsResult.result : undefined;
-    if(!middleware()) {
+    const _isSubscribed =
+      props.isSubscribed ?? !!(peer as Chat.channel)?.subscription_until_date;
+    const storiesSegmentsResult =
+      withStories &&
+      ((peer as User.user | Chat.channel)?.stories_max_id || storyId) &&
+      (await getStoriesSegments(peerId, storyId));
+    const storiesSegments = storiesSegmentsResult?.cached
+      ? await storiesSegmentsResult.result
+      : undefined;
+    if (!middleware()) {
       return;
     }
 
-    const size: PeerPhotoSize = isBig ? 'photo_big' : 'photo_small';
+    const size: PeerPhotoSize = isBig ? "photo_big" : "photo_small";
 
-    const linkedMonoforumPeer = peer?._ === 'channel' && peer.pFlags?.monoforum && peer.linked_monoforum_id ? await managers.appChatsManager.getChat(peer.linked_monoforum_id.toPeerId?.()) : undefined;
+    const linkedMonoforumPeer =
+      peer?._ === "channel" &&
+      peer.pFlags?.monoforum &&
+      peer.linked_monoforum_id
+        ? await managers.appChatsManager.getChat(
+            peer.linked_monoforum_id.toPeerId?.(),
+          )
+        : undefined;
 
     const photo = getPeerPhoto(linkedMonoforumPeer || peer);
     const avatarAvailable = !!photo;
     const avatarRendered = avatarAvailable && !!media(); // if avatar isn't available, let's reset it
-    const isAvatarCached = props.accountNumber === getCurrentAccount() && avatarAvailable && apiManagerProxy.isAvatarCached(peerId, size);
-    if(!middleware()) {
+    const isAvatarCached =
+      props.accountNumber === getCurrentAccount() &&
+      avatarAvailable &&
+      apiManagerProxy.isAvatarCached(peerId, size);
+    if (!middleware()) {
       return;
     }
 
     let isSet = false;
-    if(!avatarRendered && !isAvatarCached) {
+    if (!avatarRendered && !isAvatarCached) {
       let color: string;
-      if(peerId && (peerId !== myId || !isDialog)) {
+      if (peerId && (peerId !== myId || !isDialog)) {
         color = getPeerAvatarColorByPeer(peer);
       }
 
-      if(peerId === REPLIES_PEER_ID) {
-        set({color, icon: 'reply_filled'});
+      if (peerId === REPLIES_PEER_ID) {
+        set({ color, icon: "reply_filled" });
         return;
       }
 
-      if(peerId === HIDDEN_PEER_ID) {
-        set({color: 'violet', icon: 'author_hidden'});
+      if (peerId === HIDDEN_PEER_ID) {
+        set({ color: "violet", icon: "author_hidden" });
         return;
       }
 
-      const abbr = /* title ? wrapAbbreviation(title) :  */getPeerInitials(peer);
+      const abbr =
+        /* title ? wrapAbbreviation(title) :  */ getPeerInitials(peer);
       set({
         abbreviature: documentFragmentToNodes(abbr),
         color,
         isForum: _isForum,
         isSubscribed: _isSubscribed,
         isMonoforum: !!linkedMonoforumPeer,
-        storiesSegments
+        storiesSegments,
       });
       isSet = true;
       // return Promise.resolve(true);
     }
 
-    if(storiesSegmentsResult && !storiesSegmentsResult.cached) {
+    if (storiesSegmentsResult && !storiesSegmentsResult.cached) {
       updateStoriesSegments();
     }
 
-    if(avatarAvailable/*  && false */) {
-      const promise = putAvatar({photo, size, onlyThumb});
-      if(isSet) {
+    if (avatarAvailable /*  && false */) {
+      const promise = putAvatar({ photo, size, onlyThumb });
+      if (isSet) {
         return promise;
       }
 
       const changeSegments = !!storiesSegments;
       const changeForum = _isForum !== isForum();
       const changeIsSubcribed = _isSubscribed !== isSubscribed();
-      promise.then(({loadThumbPromise}) => loadThumbPromise).then(() => {
-        if(!middleware()) {
-          return;
-        }
+      promise
+        .then(({ loadThumbPromise }) => loadThumbPromise)
+        .then(() => {
+          if (!middleware()) {
+            return;
+          }
 
-        if(changeSegments) {
-          setStoriesSegments(storiesSegments);
-        }
+          if (changeSegments) {
+            setStoriesSegments(storiesSegments);
+          }
 
-        if(changeForum) {
-          setIsForum(_isForum);
-        }
+          if (changeForum) {
+            setIsForum(_isForum);
+          }
 
-        if(changeIsSubcribed) {
-          setIsSubscribed(_isSubscribed);
-        }
+          if (changeIsSubcribed) {
+            setIsSubscribed(_isSubscribed);
+          }
 
-        if(TEST_SWAPPING && peerId === TEST_SWAPPING) {
-          let i = true;
-          setInterval(() => {
-            i = !i;
-            setStoriesSegments(i ? undefined : storiesSegments);
-            console.log(media());
-          }, 3e3);
-        }
-      });
+          if (TEST_SWAPPING && peerId === TEST_SWAPPING) {
+            let i = true;
+            setInterval(() => {
+              i = !i;
+              setStoriesSegments(i ? undefined : storiesSegments);
+              console.log(media());
+            }, 3e3);
+          }
+        });
       // recordPromise(promise, 'putAvatar-' + peerId);
       return promise;
     }
   };
 
   const processResult = (result: Awaited<ReturnType<typeof _render>>) => {
-    if(!result && !isTopic()) {
+    if (!result && !isTopic()) {
       _setMedia();
     }
 
@@ -754,36 +899,38 @@ export const AvatarNew = (props: {
   };
 
   let lastKey: string;
-  const render = async(_props?: Modify<typeof props, {size?: never, peerId?: PeerId}>) => {
+  const render = async (
+    _props?: Modify<typeof props, { size?: never; peerId?: PeerId }>,
+  ) => {
     const key = getKey();
-    if(key !== lastKey) {
+    if (key !== lastKey) {
       cleanLastKey();
       lastKey = key;
 
       let set = avatarsMap.get(key);
-      if(!set) {
-        avatarsMap.set(key, set = new Set());
+      if (!set) {
+        avatarsMap.set(key, (set = new Set()));
       }
       set.add(ret);
     }
 
-    if(_props?.peerId !== undefined && props.peerId !== _props.peerId) {
-      node.dataset.peerId = '' + _props.peerId;
+    if (_props?.peerId !== undefined && props.peerId !== _props.peerId) {
+      node.dataset.peerId = "" + _props.peerId;
     }
 
-    if(_props) Object.assign(props, _props);
+    if (_props) Object.assign(props, _props);
     middlewareHelper.clean();
     const middleware = middlewareHelper.get();
 
-    if(props.lazyLoadQueue) {
-      if(!seen.has(props.peerId)) {
-        if(addedToQueue) return;
+    if (props.lazyLoadQueue) {
+      if (!seen.has(props.peerId)) {
+        if (addedToQueue) return;
         addedToQueue = true;
 
         const key = getKey();
         let set = believeMe.get(key);
-        if(!set) {
-          believeMe.set(key, set = new Set());
+        if (!set) {
+          believeMe.set(key, (set = new Set()));
         }
 
         set.add(ret);
@@ -793,97 +940,104 @@ export const AvatarNew = (props: {
           load: () => {
             seen.add(props.peerId);
             return render();
-          }
+          },
         });
 
-        const promise = lastRenderPromise = _render(true);
+        const promise = (lastRenderPromise = _render(true));
         const result = await promise;
-        if(!middleware()) {
+        if (!middleware()) {
           return;
         }
 
         return processResult(result);
-      } else if(addedToQueue) {
-        props.lazyLoadQueue.delete({div: node});
+      } else if (addedToQueue) {
+        props.lazyLoadQueue.delete({ div: node });
       }
     }
 
     seen.add(props.peerId);
 
-    const promise = lastRenderPromise = _render();
+    const promise = (lastRenderPromise = _render());
 
     const set = believeMe.get(key);
-    if(set) {
+    if (set) {
       set.delete(ret);
       const arr = Array.from(set);
       believeMe.delete(key);
 
-      for(let i = 0, length = arr.length; i < length; ++i) {
+      for (let i = 0, length = arr.length; i < length; ++i) {
         arr[i].render();
       }
     }
 
     const result = await promise;
-    if(!middleware()) {
+    if (!middleware()) {
       return;
     }
 
-    if(addedToQueue) {
+    if (addedToQueue) {
       addedToQueue = false;
     }
 
     return processResult(result);
   };
 
-  if(props.onStoriesStatus) {
+  if (props.onStoriesStatus) {
     createEffect(() => {
       props.onStoriesStatus(!!storyDimensions());
     });
   }
 
-  const innerClassList = (): JSX.CustomAttributes<HTMLDivElement>['classList'] => {
-    return {
-      'is-forum': isForum(),
-      'is-topic': isTopic(),
-      'is-monoforum': isMonoforum(),
-      'is-relative': !!autoDeletePeriod(),
-      'avatar-relative': !!thumb() || isSubscribed()
+  const innerClassList =
+    (): JSX.CustomAttributes<HTMLDivElement>["classList"] => {
+      return {
+        "is-forum": isForum(),
+        "is-topic": isTopic(),
+        "is-monoforum": isMonoforum(),
+        "is-relative": !!autoDeletePeriod(),
+        "avatar-relative": !!thumb() || isSubscribed(),
+      };
     };
-  };
 
-  const classList = (): JSX.CustomAttributes<HTMLDivElement>['classList'] => {
+  const classList = (): JSX.CustomAttributes<HTMLDivElement>["classList"] => {
     return {
       ...(!storiesCircle() && innerClassList()),
-      'has-stories': !!storyDimensions()
+      "has-stories": !!storyDimensions(),
     };
   };
 
-  const style = (): JSX.HTMLAttributes<HTMLDivElement>['style'] => {
+  const style = (): JSX.HTMLAttributes<HTMLDivElement>["style"] => {
     const dimensions = storyDimensions();
     return {
-      'padding': dimensions ? (dimensions.size - dimensions.willBeSize) / 2 + 'px' : undefined,
-      '--size': isTopic() && props.wrapOptions?.customEmojiSize?.width ? props.wrapOptions.customEmojiSize.width + 'px' : undefined
+      padding: dimensions
+        ? (dimensions.size - dimensions.willBeSize) / 2 + "px"
+        : undefined,
+      "--size":
+        isTopic() && props.wrapOptions?.customEmojiSize?.width
+          ? props.wrapOptions.customEmojiSize.width + "px"
+          : undefined,
     };
   };
 
   const inner = (
     <>
-      {icon() && Icon(icon(), 'avatar-icon', 'avatar-icon-' + icon())}
+      {icon() && Icon(icon(), "avatar-icon", "avatar-icon-" + icon())}
       {thumb()}
       {[media(), abbreviature()].find(Boolean)}
-      {isSubscribed() && currencyStarIcon({class: 'avatar-star', stroke: true})}
+      {isSubscribed() &&
+        currencyStarIcon({ class: "avatar-star", stroke: true })}
       {autoDeletePeriod() && (
-        <div
-          class="avatar-auto-delete-timer"
-        >
+        <div class="avatar-auto-delete-timer">
           <Show when={autoDeletePeriodBackground() || color()}>
             <div
               class="avatar-auto-delete-timer__background"
               classList={{
-                'avatar-auto-delete-timer__background--color': !!color()
+                "avatar-auto-delete-timer__background--color": !!color(),
               }}
               style={{
-                background: autoDeletePeriodBackground() ? `url(${autoDeletePeriodBackground()})` : undefined
+                background: autoDeletePeriodBackground()
+                  ? `url(${autoDeletePeriodBackground()})`
+                  : undefined,
               }}
             />
           </Show>
@@ -900,7 +1054,9 @@ export const AvatarNew = (props: {
     <Show when={storyDimensions()} fallback={inner}>
       <div>
         {storiesCircle()}
-        {props.isStoryFolded !== undefined && <div class="avatar-background"></div>}
+        {props.isStoryFolded !== undefined && (
+          <div class="avatar-background"></div>
+        )}
         <div
           class={`avatar avatar-like avatar-${storyDimensions().willBeSize} avatar-gradient`}
           classList={innerClassList()}
@@ -916,7 +1072,7 @@ export const AvatarNew = (props: {
   const element = (
     <div
       ref={node}
-      class={`avatar avatar-like avatar-${props.size} avatar-gradient ${props.class ?? ''}`}
+      class={`avatar avatar-like avatar-${props.size} avatar-gradient ${props.class ?? ""}`}
       classList={classList()}
       data-color={color()}
       data-peer-id={props.peerId}
@@ -942,10 +1098,10 @@ export const AvatarNew = (props: {
     setAutoDeletePeriod,
     updateStoriesSegments,
     set,
-    color
+    color,
   };
 
-  if(
+  if (
     props.peerId !== undefined ||
     props.peerTitle !== undefined ||
     props.peer !== undefined
@@ -967,17 +1123,26 @@ export const AvatarNew = (props: {
   return ret;
 };
 
-export function AvatarNewTsx(props: Parameters<typeof AvatarNew>[0] & {class?: string}) {
+export function AvatarNewTsx(
+  props: Parameters<typeof AvatarNew>[0] & { class?: string },
+) {
   const el = AvatarNew(props);
-  createEffect(on(() => props.peerId, () => {
-    el.render()
-  }));
+  createEffect(
+    on(
+      () => props.peerId,
+      () => {
+        el.render();
+      },
+    ),
+  );
   return el.element;
 }
 
-export function avatarNew(props: {
-  middleware: Middleware
-} & Parameters<typeof AvatarNew>[0]) {
+export function avatarNew(
+  props: {
+    middleware: Middleware;
+  } & Parameters<typeof AvatarNew>[0],
+) {
   return createRoot((dispose) => {
     props.middleware.onDestroy(dispose);
     (props.wrapOptions ??= {}).middleware = props.middleware;
