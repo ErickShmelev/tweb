@@ -622,6 +622,31 @@ export class ApiManager extends ApiManagerMethods {
         error = makeError(undefined, error);
       }
 
+      // Логирование ошибок для iOS - показываем на экране
+      if(error.code === 401 || error.code === 406) {
+        console.error('[API Error]', error.code, error.type, error.message);
+        // Показываем ошибку пользователю
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          background: red;
+          color: white;
+          padding: 20px;
+          z-index: 999999;
+          font-family: sans-serif;
+          font-size: 14px;
+        `;
+        errorDiv.innerHTML = `
+          <strong>Ошибка:</strong> ${error.type}<br>
+          <strong>Код:</strong> ${error.code}<br>
+          <strong>Сообщение:</strong> ${error.message}
+        `;
+        document.body.appendChild(errorDiv);
+      }
+
       // Временно отключено для диагностики
       // if((error.code === 401 && error.type === 'SESSION_REVOKED') ||
       //   (error.code === 406 && error.type === 'AUTH_KEY_DUPLICATED')) {
