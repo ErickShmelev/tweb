@@ -622,10 +622,11 @@ export class ApiManager extends ApiManagerMethods {
         error = makeError(undefined, error);
       }
 
-      if((error.code === 401 && error.type === 'SESSION_REVOKED') ||
-        (error.code === 406 && error.type === 'AUTH_KEY_DUPLICATED')) {
-        this.logOut();
-      }
+      // Временно отключено для диагностики
+      // if((error.code === 401 && error.type === 'SESSION_REVOKED') ||
+      //   (error.code === 406 && error.type === 'AUTH_KEY_DUPLICATED')) {
+      //   this.logOut();
+      // }
 
       if(options.ignoreErrors) {
         throw error;
@@ -640,7 +641,7 @@ export class ApiManager extends ApiManagerMethods {
         setTimeout(() => {
           if(!error.handled) {
             if(error.code === 401) {
-              this.logOut();
+              // this.logOut();
             } else {
               // ErrorService.show({error: error}); // WARNING
             }
