@@ -156,8 +156,16 @@ export class AppManagersManager {
         const otherAccountNumber = i as ActiveAccountNumber;
         const accountData = await AccountController.get(otherAccountNumber);
         if(accountData.userId === userId) {
+          // Локально удаляем дубликат аккаунта без вызова auth.logOut на сервере
+          // auth.logOut завершает все сессии пользователя, поэтому используем только локальную очистку
           const managersByAccount = await this.getManagersByAccount();
-          managersByAccount[accountNumber].apiManager.logOut(otherAccountNumber);
+          const apiManager = managersByAccount[accountNumber].apiManager;
+
+          // Сдвигаем аккаунты и очищаем хранилища без выхода на сервере
+          await AccountController.shiftAccounts(otherAccountNumber);
+          await AppStoragesManager.shiftStorages(otherAccountNumber);
+
+          apiManager.log('Removed duplicate account locally without server logout');
         }
       }
     });
